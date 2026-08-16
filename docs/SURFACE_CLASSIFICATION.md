@@ -127,6 +127,29 @@ Francisco. That makes the transfer plausible, **not verified** — San Francisco
 has almost no class 17, is not a grid, and has not been measured against its
 own road truth.
 
+### What it does on San Francisco
+
+Applied unchanged to the city it was not fitted on, with per-tile z-scoring the
+only concession to 16-bit intensity:
+
+| | Manhattan | San Francisco |
+|---|---|---|
+| carriageway | 47,625 | 26,465 |
+| other paved ground | 9,003 | 8,934 |
+| share of ground called road | 84% | 75% |
+| planted facades | 19,011 | **31,305** |
+| mid-tone facades | 48,975 | 10,157 |
+
+The differences are at least the right shape. San Francisco calls less of its
+ground carriageway, which fits a city with more open space and fewer full-block
+street walls, and finds two-thirds more planted roof and canopy, which fits a
+far greener one.
+
+**None of that is validation.** Plausible output is not measured output, and
+the model has still never been scored against San Francisco's own road truth.
+It is recorded as an observation, and the measurement stays first in the list
+below.
+
 ### The grid comes back out
 
 The most convincing check is not a number. Printing the predicted carriageway
