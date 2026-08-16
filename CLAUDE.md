@@ -120,14 +120,23 @@ so a larger `--depth` is free but does nothing once saturated.
 
 ## Known open issues
 
-- **The San Francisco tile is stale.** It carries facade styles `0, 1, 4, 7`,
-  and the current baker can only emit `0, 1, 2, 3, 7` — style 4 is unreachable.
-  Its facade re-bake never landed, so the two cities are inconsistent.
-- **The road classifier does not transfer to San Francisco.** It is fitted on
-  Manhattan and has never been scored on SF. On the shipped SF tile it calls
-  99.3% of ground "carriageway" (35,399 road vs 242 other paved), against 84% on
-  Midtown and a 76.9% ground-truth base rate. Treat it as collapsed, not merely
-  unverified. See `docs/SURFACE_CLASSIFICATION.md`.
+- **The road classifier has never been scored on San Francisco.** It is fitted
+  on Manhattan against buffered Overture carriageways, and SF has its own road
+  truth available, which has never been fetched. The output is *plausible* —
+  both tiles now decode as:
+
+  | tile | carriageway | other paved | road share |
+  |---|---|---|---|
+  | Midtown | 47,625 | 10,505 | 81.9% |
+  | San Francisco | 26,465 | 9,176 | 74.3% |
+
+  against a 76.9% Midtown ground-truth base rate. But plausible is not measured,
+  and this is the first item on the list in `docs/SURFACE_CLASSIFICATION.md`.
+  Do not upgrade "looks right" to "is right" without the SF labels.
+- Both tiles now carry facade styles `0, 1, 2, 3, 7` from the same roof-plane
+  classifier, so the two cities are consistent. An earlier SF tile carried style
+  `4`, which the current baker cannot emit at all — if you ever see a `4`, the
+  tile predates the classifier and needs re-baking.
 
 ## Conventions
 
