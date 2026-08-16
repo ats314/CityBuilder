@@ -1,0 +1,3 @@
+# Verification only. Kept separate from requirements.txt so CI does not pull the
+# heavy geospatial stack just to render a frame.
+playwright>=1.40

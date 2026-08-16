@@ -1,0 +1,7 @@
+# Baking tools only (tools/*.py). The renderer itself has no dependencies —
+# index.html is a single file with no build step and no package manager.
+numpy>=1.24
+scipy>=1.10           # ndimage, for roof-plane labelling in bake_lidar_city.py
+pillow>=10            # writes the tile PNG
+laspy[lazrs]>=2.5     # reads EPT .laz nodes; the lazrs backend is required
+pyarrow>=14           # Overture GeoParquet footers, via tools/overture_fetch.py
