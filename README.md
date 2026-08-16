@@ -107,7 +107,7 @@ because it makes a normally invisible trade-off visible:
 | **TELETEXT** | 1x1 | Block-and-shade ramp (`░▒▓█`). Chunky, poster-like, very readable at a glance. |
 | **QUADRANT** | 2x2 | 4x the spatial resolution for the same one-character cost, using `▘▝▀▖▌▞▛…`. |
 | **BRAILLE** | 2x4 | 8x the resolution — `⠁⠂⠄⡀…` gives 256 dot patterns per cell. Highest fidelity, and it stops looking like text. |
-| **HYBRID** | 2x3 | All four families in one alphabet, chosen per cell: lines on edges, shades on flat, quadrants on mass, braille on detail. |
+| **HYBRID** | 2x4 | Braille and quadrant in one alphabet: dots for texture, solid blocks for the cells that are vertically uniform. |
 
 Sub-cell alphabets render the scene at `cols*SX x rows*SY` and dither the
 sub-samples through a 4x4 Bayer matrix, so the dots carry shape while the cell
@@ -119,40 +119,44 @@ Fidelity and legibility pull against each other. Braille is objectively the
 better image and ASCII is the better *picture* — you lose the semantic reading
 of a glyph the moment the glyph is only a dot pattern.
 
-### HYBRID — stop choosing
+### HYBRID — braille and quadrant
 
-The three sub-cell alphabets fail in complementary ways, which is the whole
-reason the trade-off looked unavoidable:
+Two of the sub-cell alphabets fail in exactly complementary ways:
 
 | | strength | weakness |
 |---|---|---|
-| TELETEXT | crisp structural lines and silhouettes | flat areas come out empty |
-| QUADRANT | solid mass and saturated colour | every edge blocks up |
-| BRAILLE | fine spatial detail | washes into grey haze, no solidity |
+| QUADRANT | solid mass and saturated colour | 4 sub-cells, so detail blocks up |
+| BRAILLE | 8 sub-cells of fine detail | washes into grey haze, no solidity |
 
-None of those weaknesses overlap. So HYBRID does not blend them — it **prints
-each cell in whichever family suits what is in that cell**:
+They combine where others don't, because they are **the same kind of mark at two
+granularities**. Both say *which sub-cells are lit*, and a quadrant is exactly a
+2x2 pooling of braille's 2x4 — they nest. Switching between them changes the
+grain, not the medium.
 
-- **an edge** — Sobel over cell luminance and depth — prints a line glyph
-  oriented to the gradient, which is what teletext was doing right
-- **a flat cell** — sub-cell contrast under 0.10 — prints a solid shade block,
-  so large areas read as mass rather than as absent
-- **an ordinary cell** — contrast under 0.30 — prints a quadrant, keeping
-  sub-cell position and full colour
-- **a detailed cell** — everything above that — prints braille dots, which is
-  the only family with the resolution for it
+So HYBRID never chooses a family, and has no renderer of its own: it is the
+BRAILLE path unmodified, down to the dither, with one glyph table swapped in.
+Of the 256 dot masks, **16 have both rows of each half agreeing**. Those
+describe a cell that is vertically uniform, so they are drawn as the solid block
+with the same silhouette rather than as four loose dots:
 
-One 2x3 sub-sample feeds all four: dots straight through, quadrants by pooling
-the lower two rows, shades and lines from the cell mean. Edges are detected at
-*cell* resolution, which the two dot alphabets have no notion of at all — a
-braille cell knows its eight dots and nothing about its neighbours, which is
-precisely why braille silhouettes dissolve.
+```
+00001111 -> ▀      01010101 -> ▌      11111111 -> █      01100011 -> ⡩
+```
 
-The constraint that shapes it: the glyph index travels through the cell buffer
-as **one byte**, so all four families share 256 slots. Full 2x4 braille is 256
-on its own, so the braille here is the 6-dot 2x3 subset — 64 patterns. That
-costs a little vertical resolution inside a cell and buys crisp silhouettes
-around it, which is a good trade, because the eye reads the silhouette first.
+A cell that is flat, saturated or empty gains mass; a cell with texture in it
+keeps braille's resolution. Nothing is tested against a threshold, so nothing
+flickers as the camera moves — which is what sinks the obvious implementation,
+where per-cell contrast picks a family and every cell crossing the cutoff swaps
+its entire mark type.
+
+It also costs no glyph budget. The index travels through the cell buffer as
+**one byte**, and 240 dot patterns plus 16 blocks is exactly 256 — so braille
+keeps all four of its rows here rather than being cut to a 2x3 subset to make
+room.
+
+Measured on Midtown at 183x62, ~17% of cells land on blocks. Forcing more of
+them — by holding the dither constant within a row pair, so rows agree far more
+often — reaches 80% and simply reproduces QUADRANT's mid-distance mush.
 
 ## Press `C`
 
