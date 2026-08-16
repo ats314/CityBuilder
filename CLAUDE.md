@@ -31,6 +31,14 @@ python3 tools/bake_lidar_city.py --lat 40.7530 --lon -73.9770 --grid 512 \
 
 `SMOKE_CHROME=/path/to/chrome` overrides the browser if one is preinstalled.
 
+Validate the workflow file before pushing it — an invalid one fails the run
+*instantly*, with no job and no log to read, which looks like Actions being
+switched off rather than like a syntax error:
+
+```bash
+python3 -c "import yaml;yaml.safe_load(open('.github/workflows/ci.yml'))"
+```
+
 ## Verify visual claims by rendering them
 
 This is the most important habit in this repo, and it is not optional. The

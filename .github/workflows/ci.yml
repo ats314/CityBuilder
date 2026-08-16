@@ -48,8 +48,5 @@ jobs:
           for f in tools/*.py; do
             m=$(basename "$f" .py)
             [ "$m" = "smoke_test" ] && continue
-            python3 -c "import importlib.util
-spec = importlib.util.spec_from_file_location('$m', '$f')
-spec.loader.exec_module(importlib.util.module_from_spec(spec))
-print('imported $m')"
+            python3 -c "import importlib.util as u; s=u.spec_from_file_location('$m','$f'); s.loader.exec_module(u.module_from_spec(s)); print('imported $m')"
           done
