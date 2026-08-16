@@ -159,33 +159,37 @@ function quadrantGlyphs(){
   put(0,0,1,1,'▄'); put(1,0,1,1,'▙'); put(0,1,1,1,'▟'); put(1,1,1,1,'█');
   return t;
 }
-/* One alphabet holding four families at once, because the three sub-cell sets
-   fail in complementary ways: teletext draws crisp structure but leaves flat
-   areas empty, quadrant carries solid tone and colour but blocks up every edge,
-   braille resolves fine detail and washes out into grey haze with no solidity.
-   Printed together — each cell choosing the family that suits what is in it —
-   the weaknesses cancel.
+/* Braille and quadrant as one alphabet — the two that actually combine, because
+   they are the same kind of mark at two granularities. Both say "which
+   sub-cells are lit", and a quadrant is exactly a 2x2 pooling of braille's 2x4,
+   so they nest. Their weaknesses are the complementary pair: braille resolves
+   fine detail and washes out into a grey haze with no solidity, quadrant
+   carries solid ink and colour mass and blocks up every edge.
 
-   The glyph index is a single byte through the cell buffer, so all four have to
-   share 256 slots. Full 2x4 braille is 256 on its own, so braille here is the
-   6-dot 2x3 subset, which is also what lets one 2x3 sub-sample feed every
-   family: dots straight through, quadrants by pooling the lower two rows,
-   shades and lines from the cell mean. */
-const HY = { BRAILLE: 0, QUAD: 64, SHADE: 80, EDGE: 85 };
+   So the family is never chosen, and there is no renderer for it: this is the
+   BRAILLE path unmodified, down to the dither, with one table swapped in. Of
+   the 256 dot masks, 16 have both rows of each half agreeing — those describe a
+   cell that is vertically uniform, so they are drawn as the solid block with
+   the same silhouette instead of as four loose dots. Everything else stays
+   dots. A cell that is flat, saturated or empty gains mass; a cell with texture
+   in it keeps braille's resolution. Nothing tests a threshold, so nothing
+   flickers when the camera moves, and it costs no glyph budget: 240 patterns
+   plus 16 blocks is exactly the 256 that fit the one-byte glyph index, which is
+   what lets braille keep all four rows here instead of a 2x3 subset.
+
+   Measured on Midtown at 183x62, that lands ~17% of cells on blocks. Forcing
+   more (by holding the dither constant within a row pair, so rows agree far
+   more often) goes to 80% and just reproduces QUADRANT's mid-distance mush. */
 function hybridGlyphs(){
-  const t = new Array(90).fill(' ');
-  const dot = [[0, 1, 2], [3, 4, 5]];              // 6-dot: [col][row] -> bit
-  const braille = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20];
-  for (let v = 0; v < 64; v++){
-    let m = 0;
-    for (let c = 0; c < 2; c++) for (let r = 0; r < 3; r++)
-      if (v & (1 << (r * 2 + c))) m |= braille[dot[c][r]];
-    t[HY.BRAILLE + v] = String.fromCharCode(0x2800 + m);
+  const quad = quadrantGlyphs(), dots = brailleGlyphs();
+  const out = new Array(256);
+  for (let v = 0; v < 256; v++){
+    // row j occupies bits j*2 (col 0) and j*2+1 (col 1), rows top-down
+    const r0 = v & 3, r1 = (v >> 2) & 3, r2 = (v >> 4) & 3, r3 = (v >> 6) & 3;
+    // r0 is already TL|TR<<1 and r2 is BL|BR<<1, which is the quadrant index
+    out[v] = (r0 === r1 && r2 === r3) ? quad[r0 | (r2 << 2)] : dots[v];
   }
-  quadrantGlyphs().forEach((g, i) => { t[HY.QUAD + i] = g; });
-  [' ', '░', '▒', '▓', '█'].forEach((g, i) => { t[HY.SHADE + i] = g; });
-  ['─', '╱', '│', '╲'].forEach((g, i) => { t[HY.EDGE + i] = g; });
-  return t;
+  return out;
 }
 
 function brailleGlyphs(){
@@ -238,10 +242,11 @@ const ALPHABETS = [
   },
   { name:'QUADRANT', mode:'bits', sub:[2,2], probe:'▟', glyphs: quadrantGlyphs(), edges:null, ramps:null },
   { name:'BRAILLE',  mode:'bits', sub:[2,4], probe:'⣿', glyphs: brailleGlyphs(),  edges:null, ramps:null },
-  // probes the 6-dot braille cell, the least universally drawn of the four
-  // families it mixes: if that is missing the whole alphabet is skipped rather
-  // than printed with tofu in the detailed cells
-  { name:'HYBRID',   mode:'hy',   sub:[2,3], probe:'⠿', glyphs: hybridGlyphs(),   edges:null, ramps:null }
+  // same renderer as BRAILLE, down to the dither — only the glyph table differs.
+  // Probes the full braille cell, the less universally drawn of the two families
+  // it mixes: if that is missing the alphabet is skipped rather than printed
+  // with tofu in the textured cells.
+  { name:'HYBRID',   mode:'bits', sub:[2,4], probe:'⣿', glyphs: hybridGlyphs(),   edges:null, ramps:null }
 ];
 
 let ALPHA = 0;
@@ -1246,89 +1251,8 @@ float lumAt(ivec2 p){ return texelFetch(uInfT, cl(p), 0).r; }
 float depAt(ivec2 p){ return texelFetch(uInfT, cl(p), 0).b; }
 int   glyphAt(int level, int kind){ return int(texelFetch(uRamp, ivec2(level, kind), 0).r * 255.0 + 0.5); }
 
-/* mean luminance of a whole cell, from its middle sub-row: cheap enough to call
-   nine times per cell for a Sobel at cell resolution rather than sub-cell */
-float cellLum(ivec2 c){
-  ivec2 b = c * uSub + ivec2(0, uSub.y / 2);
-  return 0.5 * (texelFetch(uInfT, cl2(b), 0).r + texelFetch(uInfT, cl2(b + ivec2(1,0)), 0).r);
-}
-float cellDep(ivec2 c){
-  return texelFetch(uInfT, cl2(c * uSub + ivec2(0, uSub.y / 2)), 0).b;
-}
-
 void main(){
   ivec2 id = ivec2(gl_FragCoord.xy);
-
-  /* ---- hybrid: one alphabet, four families, chosen per cell -------------
-     Structure is printed as a line, flat tone as a solid shade, ordinary mass
-     as a quadrant and fine texture as braille dots. Each family is doing the
-     job it is actually good at, which is why the result is sharper than any of
-     them alone rather than an average of the three. */
-  if (uMode == 2){
-    ivec2 b = id * uSub;
-    vec3 acc = vec3(0.0);
-    float s[6];
-    float lsum = 0.0, lmin = 1e9, lmax = -1e9;
-    int n = 0;
-    for (int j = 0; j < 3; j++){
-      for (int i = 0; i < 2; i++){
-        ivec2 q = b + ivec2(i, uSub.y - 1 - j);      // texture rows run bottom-up
-        float sl = texelFetch(uInfT, cl2(q), 0).r;
-        acc += texelFetch(uColT, cl2(q), 0).rgb;
-        s[j * 2 + i] = sl;
-        lsum += sl; lmin = min(lmin, sl); lmax = max(lmax, sl); n++;
-      }
-    }
-    vec3 cc = acc / float(n);
-    float ll = lsum / float(n);
-    float detail = lmax - lmin;                       // sub-cell contrast
-
-    // Sobel at CELL resolution: this is what teletext gets right and the two
-    // dot alphabets have no notion of at all.
-    float lgx = (cellLum(id + ivec2(-1,-1)) + 2.0*cellLum(id + ivec2(-1,0)) + cellLum(id + ivec2(-1,1)))
-              - (cellLum(id + ivec2( 1,-1)) + 2.0*cellLum(id + ivec2( 1,0)) + cellLum(id + ivec2( 1,1)));
-    float lgy = (cellLum(id + ivec2(-1,-1)) + 2.0*cellLum(id + ivec2(0,-1)) + cellLum(id + ivec2(1,-1)))
-              - (cellLum(id + ivec2(-1, 1)) + 2.0*cellLum(id + ivec2(0, 1)) + cellLum(id + ivec2(1, 1)));
-    float dgx = cellDep(id + ivec2(-1,0)) - cellDep(id + ivec2(1,0));
-    float dgy = cellDep(id + ivec2(0,-1)) - cellDep(id + ivec2(0,1));
-    float edge = max(length(vec2(lgx, lgy)) * 0.75, length(vec2(dgx, dgy)) * 9.0);
-
-    int gi;
-    if (edge > uEdge && ll > 0.012){
-      bool useDep = abs(dgx) + abs(dgy) > 0.004;
-      float gx = useDep ? dgx : lgx, gy = useDep ? dgy : lgy;
-      float ang = mod(atan(gy, gx) + 1.5707963 + 6.2831853, 3.1415926);
-      gi = 85 + int(mod(floor(ang / 0.7853981 + 0.5), 4.0));       // ─ ╱ │ ╲
-    } else if (detail < 0.10){
-      gi = 80 + int(clamp(pow(ll, uGamma), 0.0, 1.0) * 4.0 + 0.5); // flat -> shade
-    } else if (detail < 0.30){
-      int q = 0;                                     // moderate -> quadrant
-      if (s[0] > ll) q |= 1;
-      if (s[1] > ll) q |= 2;
-      if (0.5 * (s[2] + s[4]) > ll) q |= 4;
-      if (0.5 * (s[3] + s[5]) > ll) q |= 8;
-      gi = 64 + q;
-    } else {
-      int bits = 0;                                  // fine -> braille dots
-      for (int j = 0; j < 3; j++)
-        for (int i = 0; i < 2; i++)
-          if (s[j * 2 + i] > 0.12 + 0.74 * bayer(b + ivec2(i, j))) bits |= 1 << (j * 2 + i);
-      gi = bits;
-    }
-    if (uRain > 0.0){
-      float colId = float(id.x) + floor(float(id.y) * 0.5);
-      float row   = floor(float(id.y) + uTime * 46.0 + h11(colId) * 60.0);
-      if (h12(vec2(colId, row)) > 1.0 - 0.011 * uRain && ll < 0.5){
-        gi = 86;                                     // a slanted stroke
-        cc = mix(cc, vec3(0.40,0.60,0.85), 0.6);
-      }
-    }
-    cc = cc * (0.85 + 0.55 * smoothstep(0.0, 0.6, ll));
-    float l2 = dot(cc, vec3(0.299, 0.587, 0.114));
-    cc = mix(vec3(l2), cc, uSat);
-    oCol = vec4(cc, float(gi) / 255.0);
-    return;
-  }
 
   /* ---- sub-cell mode: print the glyph whose dot pattern matches ---- */
   if (uMode == 1){
@@ -2162,7 +2086,7 @@ function frame(now){
   gl.uniform1f(P_GLYPH.u.uRain, S.rain);
   gl.uniform1f(P_GLYPH.u.uSat, S.sat);
   gl.uniform1i(P_GLYPH.u.uRainGlyph, RAIN_GLYPH);
-  gl.uniform1i(P_GLYPH.u.uMode, A().mode === 'bits' ? 1 : A().mode === 'hy' ? 2 : 0);
+  gl.uniform1i(P_GLYPH.u.uMode, A().mode === 'bits' ? 1 : 0);
   gl.uniform2i(P_GLYPH.u.uSub, RT.sx, RT.sy);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
