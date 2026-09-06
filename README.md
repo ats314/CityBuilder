@@ -24,6 +24,9 @@ city you like has a shareable address.
 
 `docs/MASTER.md` says how this fits with the other four repositories: it is a
 *target* for a compiled World Seed, and the only one that is not a 3D engine.
+**AMSTERDAM CANAL BELT** is the first city to arrive that way: a real 400 m
+block of the Amstel bend, 23 pts/m² of CC0 airborne lidar compiled to a 285 KB
+seed and baked to a 39 KB texture, with no rendering code changed.
 
 ---
 
